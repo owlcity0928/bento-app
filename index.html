@@ -240,8 +240,15 @@ $('list').addEventListener('click', e => {
 
 const GOOGLE_CONFIG = {
   formUrl: "https://docs.google.com/forms/d/e/1FAIpQLSdBmUT_p7hND6OsNBr8aAJson_dEe1u53ui_jx0tJ9X7YONPw/formResponse",
-  entries: { date: "entry.1230768809", location: "entry.2039748234", store: "entry.2095738887",
-    subcontractor: "entry.497629936", quantity: "entry.1217894018", unitPrice: "entry.91820285", payment: "entry.1064110417" }
+  entries: { 
+    date: "entry.1230768809",          // 日期
+    location: "entry.2039748234",     // 工區地點
+    store: "entry.2095738887",        // 便當店家
+    subcontractor: "entry.497629936", // 廠商/工班名稱
+    quantity: "entry.1217894018",     // 數量
+    unitPrice: "entry.91820285",      // 單價
+    payment: "entry.1064110417"       // 付款方式
+  }
 };
 function syncToGoogle(r) {
   try {
