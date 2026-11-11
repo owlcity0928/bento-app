@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>便當統計系統</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🍱%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+input,select{font-size:16px!important}
+</style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 pb-12">
+<header class="bg-slate-900 text-white shadow-md sticky top-0 z-30">
+  <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+    <div class="flex items-center gap-2">
+      <span class="bg-amber-500 px-2 py-1 rounded text-lg">🍱</span>
+      <h1 class="font-bold text-base sm:text-xl">便當統計系統</h1>
+    </div>
+    <button id="exportBtn" class="bg-emerald-600 hover:bg-emerald-500 font-bold px-3 py-1.5 rounded-xl text-xs sm:text-sm shadow">📊 匯出 Excel</button>
+  </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-4 mt-4 space-y-5">
+  <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><span class="text-xs font-semibold text-slate-400">當天全場總數量</span>
+      <div class="mt-2 flex items-baseline justify-between"><span id="kQty" class="text-3xl font-extrabold text-amber-600">0</span><span class="text-xs text-slate-500">個</span></div></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><span class="text-xs font-semibold text-slate-400">當天全場總金額</span>
+      <div class="mt-2 flex items-baseline justify-between"><span id="kAmt" class="text-3xl font-extrabold text-emerald-600">0</span><span class="text-xs text-slate-500">元</span></div></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200"><span class="text-xs font-semibold text-slate-400">當天進場工班數</span>
+      <div class="mt-2 flex items-baseline justify-between"><span id="kSub" class="text-3xl font-extrabold text-blue-600">0</span><span class="text-xs text-slate-500">組</span></div></div>
+    <div class="bg-slate-800 text-white rounded-2xl p-4 shadow-sm"><span class="text-xs font-semibold text-slate-400">累積歷史紀錄</span>
+      <div class="mt-2 flex items-baseline justify-between"><span id="kAll" class="text-3xl font-extrabold text-amber-400">0</span><span class="text-xs text-slate-400">筆</span></div></div>
+  </section>
+
+  <section class="bg-white rounded-2xl p-4 shadow-sm border-2 border-amber-300">
+    <h2 class="text-base font-bold mb-1">🔢 第一步：當日便當總數</h2>
+    <p class="text-xs text-slate-400 mb-3">日期與下方登記表單的日期相同，換日請至表單修改日期。</p>
+    <div class="flex items-center gap-2">
+      <input type="number" id="fTotal" min="0" placeholder="輸入當天訂購 / 到貨總數" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-lg font-black focus:ring-2 focus:ring-amber-500 outline-none">
+      <span class="text-sm text-slate-500 shrink-0">個</span>
+    </div>
+    <div id="checkBox" class="mt-3 rounded-xl border p-3 text-sm font-bold"></div>
+  </section>
+
+  <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+    <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+      <h2 class="text-base font-bold">📈 當天各廠商統計分析</h2>
+      <span id="dateBadge" class="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-md">--</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-100"><p class="text-xs font-bold text-slate-500 text-center mb-2">各工班便當數量佔比（個）</p>
+        <div class="relative h-44 w-full"><canvas id="qtyChart"></canvas></div></div>
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-100"><p class="text-xs font-bold text-slate-500 text-center mb-2">各工班費用小計（元）</p>
+        <div class="relative h-44 w-full"><canvas id="amtChart"></canvas></div></div>
+    </div>
+    <div>
+      <h3 class="text-xs font-bold text-slate-500 mb-2">當日登記明細（可刪除輸入錯誤的紀錄）：</h3>
+      <div id="list" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+    </div>
+  </section>
+
+  <section class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+    <h2 class="text-base font-bold mb-4 pb-2 border-b border-slate-100">📝 第二步：登記各廠商 / 工班數量</h2>
+    <form id="form" class="space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div><label class="block text-xs font-bold text-slate-600 mb-1">日期</label>
+          <input type="date" id="fDate" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 font-semibold focus:ring-2 focus:ring-amber-500 outline-none"></div>
+        <div><label class="block text-xs font-bold text-slate-600 mb-1">工區 / 地點</label>
+          <input type="text" id="fLoc" placeholder="例如：銅科信邦、A棟3F" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 font-semibold focus:ring-2 focus:ring-amber-500 outline-none"></div>
+        <div><label class="block text-xs font-bold text-slate-600 mb-1">便當店家 / 店名</label>
+          <input type="text" id="fStore" placeholder="輸入店名" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 font-semibold focus:ring-2 focus:ring-amber-500 outline-none"><div class="flex flex-wrap gap-1.5 mt-2" id="storeTags"></div></div>
+        <div><label class="block text-xs font-bold text-slate-600 mb-1">廠商 / 工班名稱（誰吃的）</label>
+          <input type="text" id="fSub" placeholder="例如：昇光、連億" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 font-semibold focus:ring-2 focus:ring-amber-500 outline-none">
+          <div class="flex flex-wrap gap-1.5 mt-2" id="tags"></div></div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <div><label class="block text-xs font-bold text-slate-600 mb-1">該工班數量（個）</label>
+          <div class="flex items-center gap-2">
+            <button type="button" id="minus" class="w-12 h-12 bg-slate-100 active:bg-slate-200 border border-slate-300 rounded-xl text-xl font-black shrink-0">-</button>
+            <input type="number" id="fQty" value="5" min="1" required class="w-full text-center bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xl font-black focus:ring-2 focus:ring-amber-500 outline-none">
+            <button type="button" id="plus" class="w-12 h-12 bg-amber-500 active:bg-amber-600 text-white rounded-xl text-xl font-black shrink-0 shadow-sm">+</button>
+          </div></div>
+        <div><label class="block text-xs font-bold text-slate-600 mb-1">便當單價（元）</label>
+          <div class="grid grid-cols-4 gap-1.5 mb-1.5" id="prices"></div>
+          <input type="number" id="fPrice" value="90" min="0" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-semibold focus:ring-2 focus:ring-amber-500 outline-none"></div>
+      </div>
+      <div><label class="block text-xs font-bold text-slate-600 mb-1">付款方式</label>
+        <select id="fPay" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 font-semibold focus:ring-2 focus:ring-amber-500 outline-none">
+          <option value="代墊/扣款">代墊 / 扣款</option><option value="包商自付/現金">包商自付 / 現金</option><option value="月結/扣保留款">月結 / 扣保留款</option>
+        </select></div>
+      <div class="bg-slate-900 text-white rounded-2xl p-4 flex items-center justify-between">
+        <div><span class="text-xs text-slate-400 block">該工班費用小計</span><span class="text-2xl font-black text-amber-400">$ <span id="total">450</span></span></div>
+        <button type="submit" class="bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black px-6 py-3 rounded-xl text-base shadow-lg">寫入紀錄</button>
+      </div>
+    </form>
+  </section>
+  <p class="text-center text-xs text-slate-400">資料儲存在這台裝置的瀏覽器中，請定期匯出 Excel 備份。</p>
+</main>
+
+<script>
+const KEY = 'bento_records_v5';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+
+let records = [];
+try { const r = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(r)) records = r; } catch (e) {}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(records)); } catch (e) {} }
+
+// 為舊資料補上 id，刪除時才能精準對應
+records.forEach((r, i) => { if (!r.id) r.id = Date.now() + '-' + i; });
+
+const TKEY = 'bento_daily_totals_v1';
+let totals = {};
+try { const t = JSON.parse(localStorage.getItem(TKEY) || '{}'); if (t && typeof t === 'object') totals = t; } catch (e) {}
+function saveTotals() { try { localStorage.setItem(TKEY, JSON.stringify(totals)); } catch (e) {} }
+
+function checkInfo(date) {
+  const sum = records.filter(r => r.date === date).reduce((n, r) => n + r.quantity, 0);
+  const t = totals[date];
+  return { sum, t, diff: t === undefined ? null : t - sum };
+}
+function updateCheck() {
+  const { sum, t, diff } = checkInfo($('fDate').value);
+  let cls, msg;
+  if (diff === null) { cls = 'bg-slate-50 border-slate-200 text-slate-500'; msg = '輸入當日總數後，會自動與下方各工班合計互相查核（目前工班合計 ' + sum + ' 個）'; }
+  else if (diff === 0) { cls = 'bg-emerald-50 border-emerald-300 text-emerald-800'; msg = '✅ 吻合：各工班合計 ' + sum + ' 個 = 總數 ' + t + ' 個'; }
+  else if (diff > 0) { cls = 'bg-amber-50 border-amber-300 text-amber-800'; msg = '⚠️ 尚差 ' + diff + ' 個未分配（工班合計 ' + sum + ' / 總數 ' + t + '）'; }
+  else { cls = 'bg-rose-50 border-rose-300 text-rose-800'; msg = '❌ 工班合計超出總數 ' + (-diff) + ' 個（' + sum + ' / ' + t + '），請檢查'; }
+  $('checkBox').className = 'mt-3 rounded-xl border p-3 text-sm font-bold ' + cls;
+  $('checkBox').textContent = msg;
+}
+
+let qtyChart, amtChart;
+
+function calcTotal() {
+  $('total').textContent = ((parseInt($('fQty').value) || 0) * (parseInt($('fPrice').value) || 0)).toLocaleString();
+}
+
+function render() {
+  const date = $('fDate').value;
+  $('dateBadge').textContent = date || '當天';
+  const rows = records.filter(r => r.date === date);
+  const sub = {};
+  rows.forEach(r => {
+    const s = sub[r.subcontractor] || (sub[r.subcontractor] = { q: 0, a: 0 });
+    s.q += r.quantity; s.a += r.quantity * r.unitPrice;
+  });
+  const names = Object.keys(sub);
+  $('kQty').textContent = rows.reduce((n, r) => n + r.quantity, 0);
+  $('kAmt').textContent = rows.reduce((n, r) => n + r.quantity * r.unitPrice, 0).toLocaleString();
+  $('kSub').textContent = names.length;
+  $('kAll').textContent = records.length;
+  $('fTotal').value = totals[date] === undefined ? '' : totals[date];
+  updateCheck();
+
+  const colors = ['border-l-amber-500','border-l-emerald-500','border-l-blue-500','border-l-purple-500','border-l-rose-500'];
+  $('list').innerHTML = rows.length ? rows.map((r, i) => `
+    <div class="bg-slate-50 border border-slate-200 border-l-4 ${colors[i % 5]} rounded-xl p-3 flex justify-between items-center gap-2">
+      <div class="min-w-0">
+        <div class="font-black text-sm flex items-center gap-1.5 flex-wrap">${esc(r.subcontractor)}
+          <span class="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-normal">${esc(r.payment)}</span></div>
+        <div class="text-xs text-slate-500 mt-1">店家：<span class="font-semibold text-slate-700">${esc(r.store)}</span>｜位置：${esc(r.location)}</div>
+      </div>
+      <div class="text-right shrink-0">
+        <div class="font-black text-amber-600">${r.quantity} 個</div>
+        <div class="text-xs font-bold text-slate-700">$${(r.quantity * r.unitPrice).toLocaleString()}</div>
+        <button data-id="${esc(r.id)}" class="del text-[11px] text-rose-500 hover:text-rose-700 mt-0.5">刪除</button>
+      </div>
+    </div>`).join('') : '<div class="col-span-2 text-center py-6 text-slate-400 text-xs">當天尚無進場廠商紀錄</div>';
+
+  qtyChart.data.labels = names; qtyChart.data.datasets[0].data = names.map(n => sub[n].q); qtyChart.update();
+  amtChart.data.labels = names; amtChart.data.datasets[0].data = names.map(n => sub[n].a); amtChart.update();
+}
+
+function initCharts() {
+  const pal = ['#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#64748b'];
+  qtyChart = new Chart($('qtyChart'), { type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: pal }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } } } });
+  amtChart = new Chart($('amtChart'), { type: 'bar',
+    data: { labels: [], datasets: [{ label: '金額（元）', data: [], backgroundColor: '#10b981' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 10 } } } } } });
+}
+
+// 快速標籤與單價按鈕
+const DEFAULT_SUBS = ['昇光','連億','模板組','鋼筋組','水電組'];
+function recent(field, limit) {
+  const out = [];
+  for (const r of records) {
+    const v = (r[field] || '').trim();
+    if (v && !out.includes(v)) out.push(v);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+function renderChips(boxId, inputId, names) {
+  const box = $(boxId); box.innerHTML = '';
+  names.forEach(n => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = n;
+    b.className = 'text-xs bg-slate-200 hover:bg-amber-500 hover:text-white font-bold text-slate-700 px-2 py-1 rounded-lg';
+    b.onclick = () => { $(inputId).value = n; };
+    box.appendChild(b);
+  });
+}
+function renderSuggestions() {
+  const subs = recent('subcontractor', 5);
+  DEFAULT_SUBS.forEach(n => { if (!subs.includes(n) && subs.length < 5) subs.push(n); });
+  renderChips('tags', 'fSub', subs);
+  renderChips('storeTags', 'fStore', recent('store', 5));
+}
+[80,90,100,120].forEach(p => {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = p;
+  b.className = 'py-1.5 bg-slate-100 border border-slate-200 rounded-lg font-bold text-slate-700 text-xs';
+  b.onclick = () => { $('fPrice').value = p; calcTotal(); };
+  $('prices').appendChild(b);
+});
+$('minus').onclick = () => { $('fQty').value = Math.max(1, (parseInt($('fQty').value) || 1) - 1); calcTotal(); };
+$('plus').onclick = () => { $('fQty').value = (parseInt($('fQty').value) || 0) + 1; calcTotal(); };
+$('fQty').oninput = $('fPrice').oninput = calcTotal;
+$('fDate').onchange = render;
+$('fTotal').oninput = () => {
+  const d = $('fDate').value, v = parseInt($('fTotal').value);
+  if (v >= 0) totals[d] = v; else delete totals[d];
+  saveTotals(); updateCheck();
+};
+
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('.del'); if (!b) return;
+  if (!confirm('確定刪除這筆紀錄？')) return;
+  records = records.filter(r => String(r.id) !== b.dataset.id);
+  renderSuggestions();
+  save(); render();
+});
+
+const GOOGLE_CONFIG = {
+  formUrl: "https://docs.google.com/forms/d/e/1FAIpQLSdBmUT_p7hND6OsNBr8aAJson_dEe1u53ui_jx0tJ9X7YONPw/formResponse",
+  entries: { date: "entry.1230768809", location: "entry.2039748234", store: "entry.2095738887",
+    subcontractor: "entry.497629936", quantity: "entry.1217894018", unitPrice: "entry.91820285", payment: "entry.1064110417" }
+};
+function syncToGoogle(r) {
+  try {
+    const fd = new FormData();
+    Object.keys(GOOGLE_CONFIG.entries).forEach(k => fd.append(GOOGLE_CONFIG.entries[k], r[k]));
+    fetch(GOOGLE_CONFIG.formUrl, { method: 'POST', mode: 'no-cors', body: fd }).catch(() => {});
+  } catch (e) {}
+}
+
+$('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const qty = parseInt($('fQty').value), price = parseInt($('fPrice').value);
+  if (!(qty >= 1) || !(price >= 0)) { alert('請確認數量與單價'); return; }
+  records.unshift({
+    id: Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    date: $('fDate').value, location: $('fLoc').value.trim(), store: $('fStore').value.trim(),
+    subcontractor: $('fSub').value.trim(), quantity: qty, unitPrice: price, payment: $('fPay').value
+  });
+  save(); render();
+  syncToGoogle(records[0]);
+  $('fSub').value = ''; $('fQty').value = 5; calcTotal(); renderSuggestions();
+});
+
+$('exportBtn').onclick = async () => {
+  if (!records.length) { alert('目前沒有任何紀錄可供匯出！'); return; }
+  const data = records.map(r => ({
+    '日期': r.date, '工區地點': r.location, '便當店家': r.store, '工班/廠商': r.subcontractor,
+    '數量 (個)': r.quantity, '單價 (元)': r.unitPrice, '總價 (元)': r.quantity * r.unitPrice, '付款方式': r.payment
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '便當明細');
+  const dates = [...new Set([...Object.keys(totals), ...records.map(r => r.date)])].sort();
+  const chk = dates.map(d => { const c = checkInfo(d); return {
+    '日期': d, '當日總數 (個)': c.t === undefined ? '' : c.t, '各工班合計 (個)': c.sum,
+    '差異 (個)': c.diff === null ? '' : c.diff,
+    '查核結果': c.diff === null ? '未輸入總數' : c.diff === 0 ? '吻合' : c.diff > 0 ? '尚有未分配' : '工班合計超出' }; });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(chk), '每日查核');
+  const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  try {
+    const dl = window.claude && await claude.use('downloads');
+    if (!dl) { XLSX.writeFile(wb, '便當統計報表_' + today() + '.xlsx'); return; }
+    await dl.save({ filename: '便當統計報表_' + today() + '.xlsx', data: buf });
+  } catch (err) {
+    if (!err || err.code !== 'declined') alert('匯出失敗，請稍後再試。');
+  }
+};
+
+$('fDate').value = today();
+calcTotal(); initCharts(); render(); renderSuggestions();
+</script>
+</body>
+</html>
